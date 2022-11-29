@@ -4,5 +4,6 @@ swift_binary(
     name = "pickle",
     srcs = ["pickle/main.swift"],
     deps = [
+        "//:fickling",
     ],
 )
