@@ -25,6 +25,14 @@ load("@build_bazel_rules_swift//swift:extras.bzl", "swift_rules_extra_dependenci
 swift_rules_extra_dependencies()
 
 new_git_repository(
+    name = "SwiftCollections",
+    build_file = "swift-collections.BUILD",
+    commit = "4196e652b101ccbbdb5431433b3a7ea0b414f708",
+    remote = "https://github.com/apple/swift-collections.git",
+    shallow_since = "1666233322 -0700",
+)
+
+new_git_repository(
     name = "SwiftArgumentParser",
     build_file = "swift-argument-parser.BUILD",
     commit = "82905286cc3f0fa8adc4674bf49437cab65a8373",
