@@ -2,6 +2,14 @@ import Foundation
 import Glibc
 
 public final class Interpreter {
+  public enum Error: Swift.Error {
+    case exceedStackDepthLimit
+    case exceedMemoryLimit
+    case unsupportedOpcode
+    case unexpectedArgument
+    case unexpectedStackValue
+  }
+
   public struct Op {
     public var opcode: InstructionOpcode
     public var arg: Any?
@@ -19,7 +27,7 @@ public final class Interpreter {
   private let maxStackDepth: Int
   private let maxMemoryLength: Int
 
-  public init(filePath: String, maxStackDepth: Int = 10_000, maxMemoryLength: Int = 20_000) {
+  public init(filePath: String, maxStackDepth: Int = 50_000, maxMemoryLength: Int = 100_000) {
     let handle = fopen(filePath, "rb")!
     var opcode: UInt8 = 0
     var ops = [Op]()
@@ -52,10 +60,10 @@ public final class Interpreter {
     return op
   }
 
-  public func step() -> Bool {
+  public func step() throws -> Bool {
     guard let op = next() else { return false }
-    let opcode = opcode(op)
-    opcode.run(interpreter: self)
+    let opcode = try opcode(op)
+    try opcode.run(interpreter: self)
     return true
   }
 
@@ -68,11 +76,17 @@ public final class Interpreter {
     return stack.last
   }
 
-  private func push(_ value: Any) {
+  private func push(_ value: Any) throws {
+    if stack.count + 1 > maxStackDepth {
+      throw Error.exceedStackDepthLimit
+    }
     stack.append(value)
   }
 
-  private func put(_ key: Int, value: Any) {
+  private func put(_ key: Int, value: Any) throws {
+    if memo.count + 1 > maxMemoryLength {
+      throw Error.exceedMemoryLimit
+    }
     memo[key] = value
   }
 
@@ -127,30 +141,36 @@ public final class Interpreter {
 }
 
 protocol InterpreterOpcode {
-  func run(interpreter: Interpreter)
+  func run(interpreter: Interpreter) throws
 }
 
 extension Interpreter {
-  private func opcode(_ op: Op) -> InterpreterOpcode {
+  private func opcode(_ op: Op) throws -> InterpreterOpcode {
     switch op.opcode {
       case .PROTO:
         return Proto()
       case .STOP:
         return Stop()
       case .INT:
-        return Value(arg: op.arg! as! Int)
+        guard let arg = op.arg, let value = arg as? Int else { throw Error.unexpectedArgument }
+        return Value(arg: value)
       case .BININT:
-        return Value(arg: Int(op.arg! as! Int32))
+        guard let arg = op.arg, let value = arg as? Int32 else { throw Error.unexpectedArgument }
+        return Value(arg: Int(value))
       case .BININT1:
-        return Value(arg: Int(op.arg! as! UInt8))
+        guard let arg = op.arg, let value = arg as? UInt8 else { throw Error.unexpectedArgument }
+        return Value(arg: Int(value))
       case .BININT2:
-        return Value(arg: Int(op.arg! as! UInt16))
+        guard let arg = op.arg, let value = arg as? UInt16 else { throw Error.unexpectedArgument }
+        return Value(arg: Int(value))
       case .LONG, .LONG1, .LONG4:
-        fatalError()
+        throw Error.unsupportedOpcode
       case .STRING, .BINSTRING, .SHORT_BINSTRING:
-        return Value(arg: op.arg! as! String)
+        guard let arg = op.arg, let value = arg as? String else { throw Error.unexpectedArgument }
+        return Value(arg: value)
       case .BINBYTES, .SHORT_BINBYTES, .BINBYTES8, .BYTEARRAY8:
-        return Value(arg: op.arg! as! Data)
+        guard let arg = op.arg, let value = arg as? Data else { throw Error.unexpectedArgument }
+        return Value(arg: value)
       case .NONE:
         return Value(arg: NoneObject())
       case .NEWTRUE:
@@ -158,14 +178,16 @@ extension Interpreter {
       case .NEWFALSE:
         return Value(arg: false)
       case .UNICODE, .SHORT_BINUNICODE, .BINUNICODE, .BINUNICODE8:
-        return Value(arg: op.arg! as! String)
+        guard let arg = op.arg, let value = arg as? String else { throw Error.unexpectedArgument }
+        return Value(arg: value)
       case .FLOAT, .BINFLOAT:
-        return Value(arg: op.arg! as! Float64)
+        guard let arg = op.arg, let value = arg as? Float64 else { throw Error.unexpectedArgument }
+        return Value(arg: value)
       case .REDUCE:
         return Reduce()
       case .GLOBAL:
-        let pair = op.arg! as! (String, String)
-        return Value(arg: GlobalObject(module: pair.0, function: pair.1))
+        guard let arg = op.arg, let value = arg as? (String, String) else { throw Error.unexpectedArgument }
+        return Value(arg: GlobalObject(module: value.0, function: value.1))
       case .EMPTY_LIST:
         return Value(arg: [Any]())
       case .EMPTY_TUPLE:
@@ -193,17 +215,23 @@ extension Interpreter {
       case .MARK:
         return Value(arg: MarkObject())
       case .PUT:
-        return Put(location: op.arg! as! Int)
+        guard let arg = op.arg, let value = arg as? Int else { throw Error.unexpectedArgument }
+        return Put(location: value)
       case .GET:
-        return Get(location: op.arg! as! Int)
+        guard let arg = op.arg, let value = arg as? Int else { throw Error.unexpectedArgument }
+        return Get(location: value)
       case .BINPUT:
-        return BinPut(location: op.arg! as! UInt8)
+        guard let arg = op.arg, let value = arg as? UInt8 else { throw Error.unexpectedArgument }
+        return BinPut(location: value)
       case .BINGET:
-        return BinGet(location: op.arg! as! UInt8)
+        guard let arg = op.arg, let value = arg as? UInt8 else { throw Error.unexpectedArgument }
+        return BinGet(location: value)
       case .LONG_BINPUT:
-        return LongBinPut(location: op.arg! as! UInt32)
+        guard let arg = op.arg, let value = arg as? UInt32 else { throw Error.unexpectedArgument }
+        return LongBinPut(location: value)
       case .LONG_BINGET:
-        return LongBinGet(location: op.arg! as! UInt32)
+        guard let arg = op.arg, let value = arg as? UInt32 else { throw Error.unexpectedArgument }
+        return LongBinGet(location: value)
       case .MEMOIZE:
         return Memoize()
       case .BINPERSID:
@@ -211,7 +239,7 @@ extension Interpreter {
       case .BUILD:
         return Build()
       default:
-        fatalError("\(op)")
+        throw Error.unsupportedOpcode
     }
   }
 }
@@ -227,168 +255,168 @@ extension Interpreter {
 
 extension Interpreter {
   struct Proto: InterpreterOpcode {
-    func run(interpreter: Interpreter) {}
+    func run(interpreter: Interpreter) throws {}
   }
 
   struct Stop: InterpreterOpcode {
-    func run(interpreter: Interpreter) {}
+    func run(interpreter: Interpreter) throws {}
   }
 
   struct Value<T>: InterpreterOpcode {
     var arg: T
-    func run(interpreter: Interpreter) {
-      interpreter.push(arg)
+    func run(interpreter: Interpreter) throws {
+      try interpreter.push(arg)
     }
   }
 
   struct Put: InterpreterOpcode {
     var location: Int
-    func run(interpreter: Interpreter) {
-      guard let value = interpreter.peek() else { return }
-      interpreter.put(location, value: value)
+    func run(interpreter: Interpreter) throws {
+      guard let value = interpreter.peek() else { throw Error.unexpectedStackValue }
+      try interpreter.put(location, value: value)
     }
   }
 
   struct Get: InterpreterOpcode {
     var location: Int
-    func run(interpreter: Interpreter) {
-      guard let value = interpreter.get(location) else { return }
-      interpreter.push(value)
+    func run(interpreter: Interpreter) throws {
+      guard let value = interpreter.get(location) else { throw Error.unexpectedStackValue }
+      try interpreter.push(value)
     }
   }
 
   struct BinPut: InterpreterOpcode {
     var location: UInt8
-    func run(interpreter: Interpreter) {
-      guard let value = interpreter.peek() else { return }
-      interpreter.put(Int(location), value: value)
+    func run(interpreter: Interpreter) throws {
+      guard let value = interpreter.peek() else { throw Error.unexpectedStackValue }
+      try interpreter.put(Int(location), value: value)
     }
   }
 
   struct BinGet: InterpreterOpcode {
     var location: UInt8
-    func run(interpreter: Interpreter) {
-      guard let value = interpreter.get(Int(location)) else { return }
-      interpreter.push(value)
+    func run(interpreter: Interpreter) throws {
+      guard let value = interpreter.get(Int(location)) else { throw Error.unexpectedStackValue }
+      try interpreter.push(value)
     }
   }
 
   struct LongBinPut: InterpreterOpcode {
     var location: UInt32
-    func run(interpreter: Interpreter) {
-      guard let value = interpreter.peek() else { return }
-      interpreter.put(Int(location), value: value)
+    func run(interpreter: Interpreter) throws {
+      guard let value = interpreter.peek() else { throw Error.unexpectedStackValue }
+      try interpreter.put(Int(location), value: value)
     }
   }
 
   struct LongBinGet: InterpreterOpcode {
     var location: UInt32
-    func run(interpreter: Interpreter) {
-      guard let value = interpreter.get(Int(location)) else { return }
-      interpreter.push(value)
+    func run(interpreter: Interpreter) throws {
+      guard let value = interpreter.get(Int(location)) else { throw Error.unexpectedStackValue }
+      try interpreter.push(value)
     }
   }
 
   struct Memoize: InterpreterOpcode {
-    func run(interpreter: Interpreter) {
-      guard let value = interpreter.peek() else { return }
-      interpreter.put(interpreter.memo.count, value: value)
+    func run(interpreter: Interpreter) throws {
+      guard let value = interpreter.peek() else { throw Error.unexpectedStackValue }
+      try interpreter.put(interpreter.memo.count, value: value)
     }
   }
 
   struct Reduce: InterpreterOpcode {
-    func run(interpreter: Interpreter) {
-      guard let arg = interpreter.pop() else { return }
-      guard let function = interpreter.pop() as? GlobalObject else { return }
+    func run(interpreter: Interpreter) throws {
+      guard let arg = interpreter.pop() else { throw Error.unexpectedStackValue }
+      guard let function = interpreter.pop() as? GlobalObject else { throw Error.unexpectedStackValue }
       let result: Any
       if let args = arg as? [Any] {
         result = interpreter.call(module: function.module, function: function.function, args: args)
       } else {
         result = interpreter.call(module: function.module, function: function.function, args: [arg])
       }
-      interpreter.push(result)
+      try interpreter.push(result)
     }
   }
 
   struct Tuple: InterpreterOpcode {
-    func run(interpreter: Interpreter) {
+    func run(interpreter: Interpreter) throws {
       let args = interpreter.popUntilMark()
-      interpreter.push(args)
+      try interpreter.push(args)
     }
   }
 
   struct Tuple1: InterpreterOpcode {
-    func run(interpreter: Interpreter) {
-      guard let top = interpreter.pop() else { return }
-      interpreter.push([top])
+    func run(interpreter: Interpreter) throws {
+      guard let top = interpreter.pop() else { throw Error.unexpectedStackValue }
+      try interpreter.push([top])
     }
   }
 
   struct Tuple2: InterpreterOpcode {
-    func run(interpreter: Interpreter) {
-      guard let top = interpreter.pop(), let bot = interpreter.pop() else { return }
-      interpreter.push([bot, top])
+    func run(interpreter: Interpreter) throws {
+      guard let top = interpreter.pop(), let bot = interpreter.pop() else { throw Error.unexpectedStackValue }
+      try interpreter.push([bot, top])
     }
   }
 
   struct Tuple3: InterpreterOpcode {
-    func run(interpreter: Interpreter) {
-      guard let top = interpreter.pop(), let mid = interpreter.pop(), let bot = interpreter.pop() else { return }
-      interpreter.push([bot, mid, top])
+    func run(interpreter: Interpreter) throws {
+      guard let top = interpreter.pop(), let mid = interpreter.pop(), let bot = interpreter.pop() else { throw Error.unexpectedStackValue }
+      try interpreter.push([bot, mid, top])
     }
   }
 
   struct BinPersId: InterpreterOpcode {
-    func run(interpreter: Interpreter) {
-      guard let pid = interpreter.pop() else { return }
-      let result = interpreter.call(module: "Unpickler", function: "persistent_load", args: [pid])
-      interpreter.push(result)
+    func run(interpreter: Interpreter) throws {
+      guard let pid = interpreter.pop() else { throw Error.unexpectedStackValue }
+      let result = interpreter.call(module: "UNPICKLER", function: "persistent_load", args: [pid])
+      try interpreter.push(result)
     }
   }
 
   struct Build: InterpreterOpcode {
-    func run(interpreter: Interpreter) {
-      guard let arg = interpreter.pop() else { return }
-      guard let objname = interpreter.pop() else { return }
+    func run(interpreter: Interpreter) throws {
+      guard let arg = interpreter.pop() else { throw Error.unexpectedStackValue }
+      guard let objname = interpreter.pop() else { throw Error.unexpectedStackValue }
       let result = interpreter.call(module: "\(objname)", function: "__setstate__", args: [arg])
-      interpreter.push(result)
+      try interpreter.push(result)
     }
   }
 
   struct SetItems: InterpreterOpcode {
-    func run(interpreter: Interpreter) {
+    func run(interpreter: Interpreter) throws {
       let slice = interpreter.popUntilMark()
-      guard var dict = interpreter.pop() as? [String: Any] else { return }
+      guard var dict = interpreter.pop() as? [String: Any] else { throw Error.unexpectedStackValue }
       precondition(slice.count % 2 == 0)
       for i in 0..<(slice.count / 2) {
         dict["\(slice[i * 2])"] = slice[i * 2 + 1]
       }
-      interpreter.push(dict)
+      try interpreter.push(dict)
     }
   }
 
   struct SetItem: InterpreterOpcode {
-    func run(interpreter: Interpreter) {
-      guard let value = interpreter.pop(), let key = interpreter.pop(), var dict = interpreter.pop() as? [String: Any] else { return }
+    func run(interpreter: Interpreter) throws {
+      guard let value = interpreter.pop(), let key = interpreter.pop(), var dict = interpreter.pop() as? [String: Any] else { throw Error.unexpectedStackValue }
       dict["\(key)"] = value
-      interpreter.push(dict)
+      try interpreter.push(dict)
     }
   }
 
   struct Appends: InterpreterOpcode {
-    func run(interpreter: Interpreter) {
+    func run(interpreter: Interpreter) throws {
       let slice = interpreter.popUntilMark()
-      guard var list = interpreter.pop() as? [Any] else { return }
+      guard var list = interpreter.pop() as? [Any] else { throw Error.unexpectedStackValue }
       list.append(contentsOf: slice)
-      interpreter.push(list)
+      try interpreter.push(list)
     }
   }
 
   struct Append: InterpreterOpcode {
-    func run(interpreter: Interpreter) {
-      guard let value = interpreter.pop(), var list = interpreter.pop() as? [Any] else { return }
+    func run(interpreter: Interpreter) throws {
+      guard let value = interpreter.pop(), var list = interpreter.pop() as? [Any] else { throw Error.unexpectedStackValue }
       list.append(value)
-      interpreter.push(list)
+      try interpreter.push(list)
     }
   }
 }

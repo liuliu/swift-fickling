@@ -14,6 +14,6 @@ interpreter.intercept(module: nil, function: nil) { module, function, args in
   // print("module \(module), function \(function), args \(args)")
   return [nil]
 }
-while interpreter.step() {
+while try interpreter.step() {
 }
 print(interpreter.rootObject as Any)
