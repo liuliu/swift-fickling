@@ -244,7 +244,7 @@ extension Interpreter {
   struct Put: InterpreterOpcode {
     var location: Int
     func run(interpreter: Interpreter) {
-      guard let value = interpreter.peek() else { fatalError() }
+      guard let value = interpreter.peek() else { return }
       interpreter.put(location, value: value)
     }
   }
@@ -252,7 +252,7 @@ extension Interpreter {
   struct Get: InterpreterOpcode {
     var location: Int
     func run(interpreter: Interpreter) {
-      guard let value = interpreter.get(location) else { fatalError() }
+      guard let value = interpreter.get(location) else { return }
       interpreter.push(value)
     }
   }
@@ -260,7 +260,7 @@ extension Interpreter {
   struct BinPut: InterpreterOpcode {
     var location: UInt8
     func run(interpreter: Interpreter) {
-      guard let value = interpreter.peek() else { fatalError() }
+      guard let value = interpreter.peek() else { return }
       interpreter.put(Int(location), value: value)
     }
   }
@@ -268,7 +268,7 @@ extension Interpreter {
   struct BinGet: InterpreterOpcode {
     var location: UInt8
     func run(interpreter: Interpreter) {
-      guard let value = interpreter.get(Int(location)) else { fatalError() }
+      guard let value = interpreter.get(Int(location)) else { return }
       interpreter.push(value)
     }
   }
@@ -276,7 +276,7 @@ extension Interpreter {
   struct LongBinPut: InterpreterOpcode {
     var location: UInt32
     func run(interpreter: Interpreter) {
-      guard let value = interpreter.peek() else { fatalError() }
+      guard let value = interpreter.peek() else { return }
       interpreter.put(Int(location), value: value)
     }
   }
@@ -284,22 +284,22 @@ extension Interpreter {
   struct LongBinGet: InterpreterOpcode {
     var location: UInt32
     func run(interpreter: Interpreter) {
-      guard let value = interpreter.get(Int(location)) else { fatalError() }
+      guard let value = interpreter.get(Int(location)) else { return }
       interpreter.push(value)
     }
   }
 
   struct Memoize: InterpreterOpcode {
     func run(interpreter: Interpreter) {
-      guard let value = interpreter.peek() else { fatalError() }
+      guard let value = interpreter.peek() else { return }
       interpreter.put(interpreter.memo.count, value: value)
     }
   }
 
   struct Reduce: InterpreterOpcode {
     func run(interpreter: Interpreter) {
-      guard let arg = interpreter.pop() else { fatalError() }
-      guard let function = interpreter.pop() as? GlobalObject else { fatalError() }
+      guard let arg = interpreter.pop() else { return }
+      guard let function = interpreter.pop() as? GlobalObject else { return }
       let result: Any
       if let args = arg as? [Any] {
         result = interpreter.call(module: function.module, function: function.function, args: args)
@@ -319,28 +319,28 @@ extension Interpreter {
 
   struct Tuple1: InterpreterOpcode {
     func run(interpreter: Interpreter) {
-      guard let top = interpreter.pop() else { fatalError() }
+      guard let top = interpreter.pop() else { return }
       interpreter.push([top])
     }
   }
 
   struct Tuple2: InterpreterOpcode {
     func run(interpreter: Interpreter) {
-      guard let top = interpreter.pop(), let bot = interpreter.pop() else { fatalError() }
+      guard let top = interpreter.pop(), let bot = interpreter.pop() else { return }
       interpreter.push([bot, top])
     }
   }
 
   struct Tuple3: InterpreterOpcode {
     func run(interpreter: Interpreter) {
-      guard let top = interpreter.pop(), let mid = interpreter.pop(), let bot = interpreter.pop() else { fatalError() }
+      guard let top = interpreter.pop(), let mid = interpreter.pop(), let bot = interpreter.pop() else { return }
       interpreter.push([bot, mid, top])
     }
   }
 
   struct BinPersId: InterpreterOpcode {
     func run(interpreter: Interpreter) {
-      guard let pid = interpreter.pop() else { fatalError() }
+      guard let pid = interpreter.pop() else { return }
       let result = interpreter.call(module: "Unpickler", function: "persistent_load", args: [pid])
       interpreter.push(result)
     }
@@ -348,8 +348,8 @@ extension Interpreter {
 
   struct Build: InterpreterOpcode {
     func run(interpreter: Interpreter) {
-      guard let arg = interpreter.pop() else { fatalError() }
-      guard let objname = interpreter.pop() else { fatalError() }
+      guard let arg = interpreter.pop() else { return }
+      guard let objname = interpreter.pop() else { return }
       let result = interpreter.call(module: "\(objname)", function: "__setstate__", args: [arg])
       interpreter.push(result)
     }
@@ -358,7 +358,7 @@ extension Interpreter {
   struct SetItems: InterpreterOpcode {
     func run(interpreter: Interpreter) {
       let slice = interpreter.popUntilMark()
-      guard var dict = interpreter.pop() as? [String: Any] else { fatalError() }
+      guard var dict = interpreter.pop() as? [String: Any] else { return }
       precondition(slice.count % 2 == 0)
       for i in 0..<(slice.count / 2) {
         dict["\(slice[i * 2])"] = slice[i * 2 + 1]
@@ -369,7 +369,7 @@ extension Interpreter {
 
   struct SetItem: InterpreterOpcode {
     func run(interpreter: Interpreter) {
-      guard let value = interpreter.pop(), let key = interpreter.pop(), var dict = interpreter.pop() as? [String: Any] else { fatalError() }
+      guard let value = interpreter.pop(), let key = interpreter.pop(), var dict = interpreter.pop() as? [String: Any] else { return }
       dict["\(key)"] = value
       interpreter.push(dict)
     }
@@ -378,7 +378,7 @@ extension Interpreter {
   struct Appends: InterpreterOpcode {
     func run(interpreter: Interpreter) {
       let slice = interpreter.popUntilMark()
-      guard var list = interpreter.pop() as? [Any] else { fatalError() }
+      guard var list = interpreter.pop() as? [Any] else { return }
       list.append(contentsOf: slice)
       interpreter.push(list)
     }
@@ -386,7 +386,7 @@ extension Interpreter {
 
   struct Append: InterpreterOpcode {
     func run(interpreter: Interpreter) {
-      guard let value = interpreter.pop(), var list = interpreter.pop() as? [Any] else { fatalError() }
+      guard let value = interpreter.pop(), var list = interpreter.pop() as? [Any] else { return }
       list.append(value)
       interpreter.push(list)
     }
