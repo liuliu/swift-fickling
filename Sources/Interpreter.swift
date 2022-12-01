@@ -1,5 +1,6 @@
 import Foundation
 import Glibc
+import Collections
 
 public final class Interpreter {
   public enum Error: Swift.Error {
@@ -46,7 +47,10 @@ public final class Interpreter {
     self.ops = ops
     self.maxStackDepth = maxStackDepth
     self.maxMemoryLength = maxMemoryLength
-  }
+      intercept(module: "collections", function: "OrderedDict") { module, function, args in
+        return [OrderedDictionary<String, Any>()]
+      }
+    }
 
   public var rootObject: Any? {
     return stack.first
@@ -369,7 +373,12 @@ extension Interpreter {
   struct BinPersId: InterpreterOpcode {
     func run(interpreter: Interpreter) throws {
       guard let pid = interpreter.pop() else { throw Error.unexpectedStackValue }
-      let result = interpreter.call(module: "UNPICKLER", function: "persistent_load", args: [pid])
+      let result: Any
+      if let args = pid as? [Any] {
+        result = interpreter.call(module: "UNPICKLER", function: "persistent_load", args: args)
+      } else {
+        result = interpreter.call(module: "UNPICKLER", function: "persistent_load", args: [pid])
+      }
       try interpreter.push(result)
     }
   }
@@ -378,7 +387,12 @@ extension Interpreter {
     func run(interpreter: Interpreter) throws {
       guard let arg = interpreter.pop() else { throw Error.unexpectedStackValue }
       guard let objname = interpreter.pop() else { throw Error.unexpectedStackValue }
-      let result = interpreter.call(module: "\(objname)", function: "__setstate__", args: [arg])
+      let result: Any
+      if let args = arg as? [Any] {
+        result = interpreter.call(module: "\(objname)", function: "__setstate__", args: args)
+      } else {
+        result = interpreter.call(module: "\(objname)", function: "__setstate__", args: [arg])
+      }
       try interpreter.push(result)
     }
   }
@@ -386,20 +400,37 @@ extension Interpreter {
   struct SetItems: InterpreterOpcode {
     func run(interpreter: Interpreter) throws {
       let slice = interpreter.popUntilMark()
-      guard var dict = interpreter.pop() as? [String: Any] else { throw Error.unexpectedStackValue }
-      precondition(slice.count % 2 == 0)
-      for i in 0..<(slice.count / 2) {
-        dict["\(slice[i * 2])"] = slice[i * 2 + 1]
+      guard slice.count % 2 == 0 else { throw Error.unexpectedStackValue }
+      let dict = interpreter.pop()
+      if var dict = dict as? [String: Any] {
+        for i in stride(from: 0, to: slice.count, by: 2) {
+          dict["\(slice[i])"] = slice[i + 1]
+        }
+        try interpreter.push(dict)
+      } else if var dict = dict as? OrderedDictionary<String, Any> {
+        for i in stride(from: 0, to: slice.count, by: 2) {
+          dict["\(slice[i])"] = slice[i + 1]
+        }
+        try interpreter.push(dict)
+      } else {
+        throw Error.unexpectedStackValue
       }
-      try interpreter.push(dict)
     }
   }
 
   struct SetItem: InterpreterOpcode {
     func run(interpreter: Interpreter) throws {
-      guard let value = interpreter.pop(), let key = interpreter.pop(), var dict = interpreter.pop() as? [String: Any] else { throw Error.unexpectedStackValue }
-      dict["\(key)"] = value
-      try interpreter.push(dict)
+      guard let value = interpreter.pop(), let key = interpreter.pop() else { throw Error.unexpectedStackValue }
+      let dict = interpreter.pop()
+      if var dict = dict as? [String: Any] {
+        dict["\(key)"] = value
+        try interpreter.push(dict)
+      } else if var dict = dict as? OrderedDictionary<String, Any> {
+        dict["\(key)"] = value
+        try interpreter.push(dict)
+      } else {
+        throw Error.unexpectedStackValue
+      }
     }
   }
 

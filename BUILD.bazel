@@ -6,5 +6,6 @@ swift_library(
     module_name = "Fickling",
     visibility = ["//visibility:public"],
     deps = [
+        "@SwiftCollections//:Collections",
     ],
 )
