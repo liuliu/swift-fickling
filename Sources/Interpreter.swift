@@ -28,8 +28,26 @@ public final class Interpreter {
   private let maxStackDepth: Int
   private let maxMemoryLength: Int
 
-  public init(filePath: String, maxStackDepth: Int = 50_000, maxMemoryLength: Int = 100_000) {
-    let handle = fopen(filePath, "rb")!
+  public static func from(data: Data, maxStackDepth: Int = 50_000, maxMemoryLength: Int = 100_000) -> Interpreter {
+    var data = data
+    return data.withUnsafeMutableBytes {
+      let handle = fmemopen($0.baseAddress, $0.count, "rb")
+      return Interpreter(handle: handle, maxStackDepth: maxStackDepth, maxMemoryLength: maxMemoryLength)
+    }
+  }
+
+  public convenience init(filePath: String, maxStackDepth: Int = 50_000, maxMemoryLength: Int = 100_000) {
+    let handle = fopen(filePath, "rb")
+    self.init(handle: handle, maxStackDepth: maxStackDepth, maxMemoryLength: maxMemoryLength)
+  }
+
+  private init(handle: UnsafeMutablePointer<FILE>?, maxStackDepth: Int, maxMemoryLength: Int) {
+    guard let handle = handle else {
+      self.ops = []
+      self.maxStackDepth = maxStackDepth
+      self.maxMemoryLength = maxMemoryLength
+      return
+    }
     var opcode: UInt8 = 0
     var ops = [Op]()
     while true {
@@ -47,9 +65,9 @@ public final class Interpreter {
     self.ops = ops
     self.maxStackDepth = maxStackDepth
     self.maxMemoryLength = maxMemoryLength
-      intercept(module: "collections", function: "OrderedDict") { module, function, args in
-        return [OrderedDictionary<String, Any>()]
-      }
+    intercept(module: "collections", function: "OrderedDict") { module, function, args in
+      return [OrderedDictionary<String, Any>()]
+    }
     }
 
   public var rootObject: Any? {
