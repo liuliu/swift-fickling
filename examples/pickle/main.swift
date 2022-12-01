@@ -1,8 +1,11 @@
 import Fickling
+import Foundation
 
 let filename = "/home/liu/workspace/swift-diffusion/archive/data.pkl"
 
-let interpreter = Interpreter(filePath: filename)
+let data = try Data(contentsOf: URL(fileURLWithPath: filename))
+
+let interpreter = Interpreter.from(data: data) // (filePath: filename)
 interpreter.intercept(module: "UNPICKLER", function: "persistent_load") { module, function, args in
   print("load tensor with args \(args)")
   return [nil]

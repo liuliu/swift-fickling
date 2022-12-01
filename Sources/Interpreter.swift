@@ -268,8 +268,8 @@ extension Interpreter {
 
 extension Interpreter {
   public struct GlobalObject {
-    var module: String
-    var function: String
+    public var module: String
+    public var function: String
   }
   public struct NoneObject {}
   struct MarkObject {}
