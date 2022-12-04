@@ -68,7 +68,7 @@ public final class Interpreter {
     intercept(module: "collections", function: "OrderedDict") { module, function, args in
       return [OrderedDictionary<String, Any>()]
     }
-    }
+  }
 
   public var rootObject: Any? {
     return stack.first
@@ -130,10 +130,24 @@ public final class Interpreter {
     var function: String?
   }
 
+  private var functionBuild: ((Any, [Any?]) -> [Any?])? = nil
   private var functionMapping = [Function: (String, String, [Any?]) -> [Any?]]()
 
   public func intercept(module: String?, function: String?, block: @escaping (String, String, [Any?]) -> [Any?]) {
     functionMapping[Function(module: module, function: function)] = block
+  }
+
+  public func interceptBuild(_ block: @escaping (Any, [Any?]) -> [Any?]) {
+    functionBuild = block
+  }
+
+  private func build(object: Any, args: [Any]) -> Any {
+    guard let functionBuild = functionBuild else { return NoneObject() }
+    let result: [Any] = functionBuild(object, args.map { $0 is NoneObject ? nil : $0 }).map {
+      guard let v = $0 else { return NoneObject() }
+      return v
+    }
+    return result.count == 1 ? result[0] : result
   }
 
   private func call(module: String, function: String, args: [Any]) -> Any {
@@ -404,12 +418,31 @@ extension Interpreter {
   struct Build: InterpreterOpcode {
     func run(interpreter: Interpreter) throws {
       guard let arg = interpreter.pop() else { throw Error.unexpectedStackValue }
-      guard let objname = interpreter.pop() else { throw Error.unexpectedStackValue }
+      guard let obj = interpreter.pop() else { throw Error.unexpectedStackValue }
+      if var dictionary = obj as? [String: Any], let arg = arg as? [String: Any] {
+        dictionary.merge(arg) { $1 }
+        try interpreter.push(dictionary)
+        return
+      } else if var dictionary = obj as? [String: Any], let arg = arg as? OrderedDictionary<String, Any> {
+        for (key, value) in arg {
+          dictionary[key] = value
+        }
+        try interpreter.push(dictionary)
+        return
+      } else if var orderedDictionary = obj as? OrderedDictionary<String, Any>, let arg = arg as? OrderedDictionary<String, Any> {
+        orderedDictionary.merge(arg) { $1 }
+        try interpreter.push(orderedDictionary)
+        return
+      } else if var orderedDictionary = obj as? OrderedDictionary<String, Any>, let arg = arg as? [String: Any] {
+        orderedDictionary.merge(arg) { $1 }
+        try interpreter.push(orderedDictionary)
+        return
+      }
       let result: Any
       if let args = arg as? [Any] {
-        result = interpreter.call(module: "\(objname)", function: "__setstate__", args: args)
+        result = interpreter.build(object: obj, args: args)
       } else {
-        result = interpreter.call(module: "\(objname)", function: "__setstate__", args: [arg])
+        result = interpreter.build(object: obj, args: [arg])
       }
       try interpreter.push(result)
     }
