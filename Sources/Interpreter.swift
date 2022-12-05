@@ -11,6 +11,96 @@ public final class Interpreter {
     case unexpectedStackValue
   }
 
+  public final class Array {
+    private var _internal = [Any]()
+    public var array: [Any] { _internal }
+    public subscript(index: Int) -> Any {
+      get { _internal[index] }
+      set { _internal[index] = newValue }
+    }
+    public func append(_ value: Any) {
+      _internal.append(value)
+    }
+    public func append(contentsOf slice: [Any]) {
+      _internal.append(contentsOf: slice)
+    }
+    public func forEach(_ block: (Any) throws -> Void) rethrows {
+      try _internal.forEach(block)
+    }
+  }
+
+  public final class Dictionary {
+    enum InternalType {
+      case unordered([String: Any])
+      case ordered(OrderedDictionary<String, Any>)
+    }
+    private var _internal: InternalType
+    public enum DictionaryType {
+      case ordered
+      case unordered
+    }
+    init(_ type: DictionaryType) {
+      switch type {
+      case .unordered:
+        _internal = .unordered([String: Any]())
+      case .ordered:
+        _internal = .ordered(OrderedDictionary<String, Any>())
+      }
+    }
+    public var dictionary: [String: Any] {
+      switch _internal {
+      case .unordered(let dictionary):
+        return dictionary
+      case .ordered(let orderedDictionary):
+        var dictionary = [String: Any]()
+        for (key, value) in orderedDictionary {
+          dictionary[key] = value
+        }
+        return dictionary
+      }
+    }
+    public var orderedDictionary: OrderedDictionary<String, Any> {
+      switch _internal {
+      case .unordered(let dictionary):
+        var orderedDictionary = OrderedDictionary<String, Any>()
+        for (key, value) in dictionary {
+          orderedDictionary[key] = value
+        }
+        return orderedDictionary
+      case .ordered(let orderedDictionary):
+        return orderedDictionary
+      }
+    }
+    public subscript(key: String) -> Any? {
+      get {
+        switch _internal {
+        case .unordered(let dictionary):
+          return dictionary[key]
+        case .ordered(let orderedDictionary):
+          return orderedDictionary[key]
+        }
+      }
+      set {
+        switch _internal {
+        case .unordered(var dictionary):
+          dictionary[key] = newValue
+          _internal = .unordered(dictionary)
+        case .ordered(var orderedDictionary):
+          orderedDictionary[key] = newValue
+          _internal = .ordered(orderedDictionary)
+        }
+      }
+    }
+    public func forEach(_ block: (String, Any) throws -> Void) rethrows {
+      switch _internal {
+      case .unordered(let dictionary):
+        try dictionary.forEach(block)
+      case .ordered(let orderedDictionary):
+        try orderedDictionary.forEach(block)
+      }
+    }
+  }
+
   public struct Op {
     public var opcode: InstructionOpcode
     public var arg: Any?
@@ -66,7 +156,7 @@ public final class Interpreter {
     self.maxStackDepth = maxStackDepth
     self.maxMemoryLength = maxMemoryLength
     intercept(module: "collections", function: "OrderedDict") { module, function, args in
-      return [OrderedDictionary<String, Any>()]
+      return [Dictionary(.ordered)]
     }
   }
 
@@ -122,7 +212,7 @@ public final class Interpreter {
       guard let value = pop(), !(value is MarkObject) else { break }
       args.append(value)
     }
-    return Array(args.reversed())
+    return Swift.Array(args.reversed())
   }
 
   private struct Function: Equatable & Hashable {
@@ -225,9 +315,9 @@ extension Interpreter {
         guard let arg = op.arg, let value = arg as? (String, String) else { throw Error.unexpectedArgument }
         return Value(arg: GlobalObject(module: value.0, function: value.1))
       case .EMPTY_LIST:
-        return Value(arg: [Any]())
+        return Value(arg: Array())
       case .EMPTY_TUPLE:
-        return Value(arg: [Any]())
+        return Value(arg: Array())
       case .TUPLE:
         return Tuple()
       case .TUPLE1:
@@ -237,9 +327,9 @@ extension Interpreter {
       case .TUPLE3:
         return Tuple3()
       case .EMPTY_SET:
-        return Value(arg: [Any]())
+        return Value(arg: Array())
       case .EMPTY_DICT:
-        return Value(arg: [String: Any]())
+        return Value(arg: Dictionary(.unordered))
       case .SETITEMS:
         return SetItems()
       case .SETITEM:
@@ -365,7 +455,7 @@ extension Interpreter {
       guard let arg = interpreter.pop() else { throw Error.unexpectedStackValue }
       guard let function = interpreter.pop() as? GlobalObject else { throw Error.unexpectedStackValue }
       let result: Any
-      if let args = arg as? [Any] {
+      if let args = arg as? [Any] ?? (arg as? Array)?.array {
         result = interpreter.call(module: function.module, function: function.function, args: args)
       } else {
         result = interpreter.call(module: function.module, function: function.function, args: [arg])
@@ -406,7 +496,7 @@ extension Interpreter {
     func run(interpreter: Interpreter) throws {
       guard let pid = interpreter.pop() else { throw Error.unexpectedStackValue }
       let result: Any
-      if let args = pid as? [Any] {
+      if let args = pid as? [Any] ?? (pid as? Array)?.array {
         result = interpreter.call(module: "UNPICKLER", function: "persistent_load", args: args)
       } else {
         result = interpreter.call(module: "UNPICKLER", function: "persistent_load", args: [pid])
@@ -419,27 +509,15 @@ extension Interpreter {
     func run(interpreter: Interpreter) throws {
       guard let arg = interpreter.pop() else { throw Error.unexpectedStackValue }
       guard let obj = interpreter.pop() else { throw Error.unexpectedStackValue }
-      if var dictionary = obj as? [String: Any], let arg = arg as? [String: Any] {
-        dictionary.merge(arg) { $1 }
-        try interpreter.push(dictionary)
-        return
-      } else if var dictionary = obj as? [String: Any], let arg = arg as? OrderedDictionary<String, Any> {
-        for (key, value) in arg {
-          dictionary[key] = value
+      if let dictionary = obj as? Dictionary, let arg = arg as? Dictionary {
+        arg.forEach {
+          dictionary[$0] = $1
         }
         try interpreter.push(dictionary)
         return
-      } else if var orderedDictionary = obj as? OrderedDictionary<String, Any>, let arg = arg as? OrderedDictionary<String, Any> {
-        orderedDictionary.merge(arg) { $1 }
-        try interpreter.push(orderedDictionary)
-        return
-      } else if var orderedDictionary = obj as? OrderedDictionary<String, Any>, let arg = arg as? [String: Any] {
-        orderedDictionary.merge(arg) { $1 }
-        try interpreter.push(orderedDictionary)
-        return
       }
       let result: Any
-      if let args = arg as? [Any] {
+      if let args = arg as? [Any] ?? (arg as? Array)?.array {
         result = interpreter.build(object: obj, args: args)
       } else {
         result = interpreter.build(object: obj, args: [arg])
@@ -453,12 +531,7 @@ extension Interpreter {
       let slice = interpreter.popUntilMark()
       guard slice.count % 2 == 0 else { throw Error.unexpectedStackValue }
       let dict = interpreter.pop()
-      if var dict = dict as? [String: Any] {
-        for i in stride(from: 0, to: slice.count, by: 2) {
-          dict["\(slice[i])"] = slice[i + 1]
-        }
-        try interpreter.push(dict)
-      } else if var dict = dict as? OrderedDictionary<String, Any> {
+      if let dict = dict as? Dictionary {
         for i in stride(from: 0, to: slice.count, by: 2) {
           dict["\(slice[i])"] = slice[i + 1]
         }
@@ -473,10 +546,7 @@ extension Interpreter {
     func run(interpreter: Interpreter) throws {
       guard let value = interpreter.pop(), let key = interpreter.pop() else { throw Error.unexpectedStackValue }
       let dict = interpreter.pop()
-      if var dict = dict as? [String: Any] {
-        dict["\(key)"] = value
-        try interpreter.push(dict)
-      } else if var dict = dict as? OrderedDictionary<String, Any> {
+      if let dict = dict as? Dictionary {
         dict["\(key)"] = value
         try interpreter.push(dict)
       } else {
@@ -488,7 +558,7 @@ extension Interpreter {
   struct Appends: InterpreterOpcode {
     func run(interpreter: Interpreter) throws {
       let slice = interpreter.popUntilMark()
-      guard var list = interpreter.pop() as? [Any] else { throw Error.unexpectedStackValue }
+      guard let list = interpreter.pop() as? Array else { throw Error.unexpectedStackValue }
       list.append(contentsOf: slice)
       try interpreter.push(list)
     }
@@ -496,7 +566,7 @@ extension Interpreter {
 
   struct Append: InterpreterOpcode {
     func run(interpreter: Interpreter) throws {
-      guard let value = interpreter.pop(), var list = interpreter.pop() as? [Any] else { throw Error.unexpectedStackValue }
+      guard let value = interpreter.pop(), let list = interpreter.pop() as? Array else { throw Error.unexpectedStackValue }
       list.append(value)
       try interpreter.push(list)
     }
