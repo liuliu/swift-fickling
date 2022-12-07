@@ -1,5 +1,4 @@
 import Foundation
-import Glibc
 import Collections
 
 public final class Interpreter {

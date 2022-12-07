@@ -1,5 +1,7 @@
 import Foundation
+#if os(Linux)
 import Glibc
+#endif
 
 protocol ArgumentDescriptor {
   var name: String { get }
