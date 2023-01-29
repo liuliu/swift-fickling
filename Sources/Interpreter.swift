@@ -13,6 +13,7 @@ public final class Interpreter {
   public final class Array {
     private var _internal = [Any]()
     public var array: [Any] { _internal }
+    public init() {}
     public subscript(index: Int) -> Any {
       get { _internal[index] }
       set { _internal[index] = newValue }
@@ -38,7 +39,7 @@ public final class Interpreter {
       case ordered
       case unordered
     }
-    init(_ type: DictionaryType) {
+    public init(_ type: DictionaryType) {
       switch type {
       case .unordered:
         _internal = .unordered([String: Any]())
@@ -363,6 +364,10 @@ extension Interpreter {
         return BinPersId()
       case .BUILD:
         return Build()
+      case .NEWOBJ:
+        return NewObj()
+      case .NEWOBJ_EX:
+        return NewObjEx()
       default:
         throw Error.unsupportedOpcode
     }
@@ -568,6 +573,36 @@ extension Interpreter {
       guard let value = interpreter.pop(), let list = interpreter.pop() as? Array else { throw Error.unexpectedStackValue }
       list.append(value)
       try interpreter.push(list)
+    }
+  }
+
+  struct NewObj: InterpreterOpcode {
+    func run(interpreter: Interpreter) throws {
+      guard let arg = interpreter.pop() else { throw Error.unexpectedStackValue }
+      guard let classType = interpreter.pop() else { throw Error.unexpectedStackValue }
+      let args = (arg as? [Any] ?? (arg as? Array)?.array) ?? [arg]
+      let result: Any
+      if let object = classType as? GlobalObject {
+        result = interpreter.call(module: object.module, function: object.function, args: args)
+      } else {
+        result = interpreter.call(module: "\(classType)", function: "__new__", args: args)
+      }
+      try interpreter.push(result)
+    }
+  }
+
+  struct NewObjEx: InterpreterOpcode {
+    func run(interpreter: Interpreter) throws {
+      guard let kwarg = interpreter.pop() else { throw Error.unexpectedStackValue }
+      guard let arg = interpreter.pop() else { throw Error.unexpectedStackValue }
+      guard let classType = interpreter.pop() else { throw Error.unexpectedStackValue }
+      let result: Any
+      if let object = classType as? GlobalObject {
+        result = interpreter.call(module: object.module, function: object.function, args: [arg, kwarg])
+      } else {
+        result = interpreter.call(module: "\(classType)", function: "__new__", args: [arg, kwarg])
+      }
+      try interpreter.push(result)
     }
   }
 }
