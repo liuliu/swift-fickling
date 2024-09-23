@@ -5,11 +5,14 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
     name = "rules_xcodeproj",
-    sha256 = "bc8b1ae066b7333a151fd3a9ebee0d51d7779886bfb8cf9fc6e0f9d6c110fc83",
-    url = "https://github.com/MobileNativeFoundation/rules_xcodeproj/releases/download/1.10.1/release.tar.gz",
+    integrity = "sha256-b+AKGo9kJFkcN52bTraVuIu6hKlTEe/Y+LAHkhXs29o=",
+    url = "https://github.com/MobileNativeFoundation/rules_xcodeproj/releases/download/2.7.0/release.tar.gz",
 )
 
-load("@rules_xcodeproj//xcodeproj:repositories.bzl", "xcodeproj_rules_dependencies")
+load(
+    "@rules_xcodeproj//xcodeproj:repositories.bzl",
+    "xcodeproj_rules_dependencies",
+)
 
 xcodeproj_rules_dependencies()
 
