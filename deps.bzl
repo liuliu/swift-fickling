@@ -17,8 +17,7 @@ def swift_fickling_deps():
         new_git_repository,
         name = "SwiftCollections",
         build_file = "@swift-fickling//:external/swift-collections.BUILD",
-        commit = "4196e652b101ccbbdb5431433b3a7ea0b414f708",
+        commit = "9bf03ff58ce34478e66aaee630e491823326fd06",
         remote = "https://github.com/apple/swift-collections.git",
-        shallow_since = "1666233322 -0700",
     )
 
