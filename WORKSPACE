@@ -3,19 +3,25 @@ workspace(name = "swift-fickling")
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository", "new_git_repository")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
+http_archive(
+    name = "rules_xcodeproj",
+    integrity = "sha256-b+AKGo9kJFkcN52bTraVuIu6hKlTEe/Y+LAHkhXs29o=",
+    url = "https://github.com/MobileNativeFoundation/rules_xcodeproj/releases/download/2.7.0/release.tar.gz",
+)
+
+load(
+    "@rules_xcodeproj//xcodeproj:repositories.bzl",
+    "xcodeproj_rules_dependencies",
+)
+
+xcodeproj_rules_dependencies()
+
 new_git_repository(
     name = "SwiftPNG",
     build_file = "swift-png.BUILD",
     commit = "075dfb248ae327822635370e9d4f94a5d3fe93b2",
     remote = "https://github.com/kelvin13/swift-png",
     shallow_since = "1645648674 -0600",
-)
-
-git_repository(
-    name = "build_bazel_rules_swift",
-    commit = "3bc7bc164020a842ae08e0cf071ed35f0939dd39",
-    remote = "https://github.com/bazelbuild/rules_swift.git",
-    shallow_since = "1654173801 -0500",
 )
 
 load("@build_bazel_rules_swift//swift:repositories.bzl", "swift_rules_dependencies")
@@ -29,9 +35,8 @@ swift_rules_extra_dependencies()
 new_git_repository(
     name = "SwiftCollections",
     build_file = "swift-collections.BUILD",
-    commit = "4196e652b101ccbbdb5431433b3a7ea0b414f708",
+    commit = "9bf03ff58ce34478e66aaee630e491823326fd06",
     remote = "https://github.com/apple/swift-collections.git",
-    shallow_since = "1666233322 -0700",
 )
 
 new_git_repository(
