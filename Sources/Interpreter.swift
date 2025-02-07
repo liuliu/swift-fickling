@@ -289,8 +289,14 @@ extension Interpreter {
       case .BININT2:
         guard let arg = op.arg, let value = arg as? UInt16 else { throw Error.unexpectedArgument }
         return Value(arg: Int(value))
-      case .LONG, .LONG1, .LONG4:
+      case .LONG:
         throw Error.unsupportedOpcode
+      case .LONG1:
+        guard let arg = op.arg, let value = arg as? Data else { throw Error.unexpectedArgument }
+        return Value(arg: value)
+      case .LONG4:
+        guard let arg = op.arg, let value = arg as? Data else { throw Error.unexpectedArgument }
+        return Value(arg: value)
       case .STRING, .BINSTRING, .SHORT_BINSTRING:
         guard let arg = op.arg, let value = arg as? String else { throw Error.unexpectedArgument }
         return Value(arg: value)
