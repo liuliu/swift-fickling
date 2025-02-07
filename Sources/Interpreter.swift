@@ -172,14 +172,16 @@ public final class Interpreter {
     return op
   }
 
-  public func step() throws -> Bool {
+  public func step(onStop: Bool = false) throws -> Bool {
     guard let op = next() else { return false }
+    // If it is marked to stop on stop, we do that.
+    guard !onStop || op.opcode != .STOP else { return false }
     let opcode = try opcode(op)
     try opcode.run(interpreter: self)
     return true
   }
 
-  private func pop() -> Any? {
+  public func pop() -> Any? {
     guard !stack.isEmpty else { return nil }
     return stack.removeLast()
   }
