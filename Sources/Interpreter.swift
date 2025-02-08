@@ -112,6 +112,7 @@ public final class Interpreter {
     }
   }
   public let ops: [Op]
+  public let stopOffset: Int
 
   private var stack = [Any]()
   private var memo = [Int: Any]()
@@ -136,10 +137,12 @@ public final class Interpreter {
       self.ops = []
       self.maxStackDepth = maxStackDepth
       self.maxMemoryLength = maxMemoryLength
+      self.stopOffset = 0
       return
     }
     var opcode: UInt8 = 0
     var ops = [Op]()
+    var stopOffset = 0
     while true {
       let pos = ftell(handle)
       let len = fread(&opcode, 1, 1, handle)
@@ -150,11 +153,15 @@ public final class Interpreter {
       } catch {
         break
       }
+      if instruction.opcode == .STOP {
+        stopOffset = ftell(handle)
+      }
     }
     fclose(handle)
     self.ops = ops
     self.maxStackDepth = maxStackDepth
     self.maxMemoryLength = maxMemoryLength
+    self.stopOffset = stopOffset
     intercept(module: "collections", function: "OrderedDict") { module, function, args in
       return [Dictionary(.ordered)]
     }
